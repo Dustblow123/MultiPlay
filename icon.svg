@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" shape-rendering="crispEdges">
+  <rect width="128" height="128" fill="#101828"/>
+  <polygon points="64,16 92,104 64,88 36,104" fill="#9ca3af"/>
+  <rect x="58" y="40" width="12" height="12" fill="#22c55e"/>
+  <text x="64" y="122" font-family="monospace" font-size="18" font-weight="bold" fill="#fde047" text-anchor="middle">7×8</text>
+</svg>
