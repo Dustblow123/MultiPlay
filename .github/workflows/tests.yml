@@ -1,0 +1,30 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  godot:
+    runs-on: ubuntu-latest
+    env:
+      GODOT_VERSION: 4.5-stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer Godot (headless)
+        run: |
+          curl -sSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          unzip -q godot.zip
+          mv "Godot_v${GODOT_VERSION}_linux.x86_64" godot
+          chmod +x godot
+          ./godot --version
+
+      - name: Importer le projet
+        run: ./godot --headless --path . --import
+
+      - name: Tests unitaires et simulation d'élèves
+        run: ./godot --headless --path . -s tests/run_tests.gd
+
+      - name: Test de fumée du prototype
+        run: ./godot --headless --path . res://tests/smoke/smoke.tscn

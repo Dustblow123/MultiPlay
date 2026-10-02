@@ -20,6 +20,8 @@ var engine: LearningEngine:
 var paused_for_controller: bool = false
 var last_activity_unix: int = 0
 var _play_start_unix: int = 0
+## Contexte de la mission choisie au hub, lu par la scène de mission.
+var mission_context: Dictionary = {"type": "defense"}
 ## Résultat de la dernière mission, lu par l'écran de fin.
 var last_mission_result: Dictionary = {}
 
