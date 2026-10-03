@@ -118,7 +118,8 @@ nouveaux sont autorisés, sinon arène.
 Chaque réponse est enregistrée : horodatage, session, jour, fait, orientation,
 mode, options proposées, réponse donnée, juste/faux, rapide, suspecte, temps de
 réponse, temps cible, révision due ou non, contexte de mission. Les débuts de
-session sont aussi journalisés. `LearningEngine.rebuild_from_journal(entries)`
+session sont aussi journalisés. Le jeu peut ajouter `variant` (par exemple `"inverted"` pour le calcul inversé)
+afin de distinguer la présentation choisie. `LearningEngine.rebuild_from_journal(entries)`
 recalcule tous les états et la calibration à partir du journal seul, ce qui
 permet de faire évoluer l'algorithme sans perdre l'historique.
 

@@ -76,6 +76,16 @@ var _boss_label: Label
 var is_defense: bool = false
 var is_duel: bool = false
 var _planet_label: Label
+## Calcul inversé (3) : le vaisseau porte le calcul, une nuée porte les nombres,
+## on se place sous le bon et on tire. Variante de vague des items QCM.
+var _inverted: bool = false
+var _swarm: Array = []
+var _swarm_labels: Array = []
+var _swarm_values: Array = []
+var _target: Node2D
+var _ship_label: Label
+const SWARM_HIT_HALF_WIDTH := 34.0
+const INVERTED_CHANCE := 0.4
 var _planet_shield: Array = []
 var _last_outcome: Dictionary = {}
 var _intro_shown: bool = false
@@ -124,6 +134,24 @@ func _build_scene() -> void:
 	_enemy.add_child(_enemy_label)
 	_enemy.visible = false
 	add_child(_enemy)
+
+	for i in range(4):
+		var e := Node2D.new()
+		var body := PixelArt.sprite("enemy", {}, 3.0)
+		e.add_child(body)
+		var l := UI.big_number("", 24)
+		l.position = Vector2(-50, -2)
+		l.size = Vector2(100, 32)
+		e.add_child(l)
+		e.visible = false
+		add_child(e)
+		_swarm.append(e)
+		_swarm_labels.append(l)
+	_ship_label = UI.big_number("", 22, UI.ACCENT)
+	_ship_label.position = Vector2(-60, -60)
+	_ship_label.size = Vector2(120, 30)
+	_ship_label.visible = false
+	_ship.add_child(_ship_label)
 
 	# Les 4 canons, couleurs Xbox avec la lettre affichée (8).
 	var x0 := W / 2.0 - 190
@@ -246,6 +274,11 @@ func _next_item() -> void:
 	_enemy.visible = true
 	_enemy_label.text = item["question"]
 	_last_outcome = {}
+	_inverted = false
+	_target = null
+	_ship_label.visible = false
+	for e in _swarm:
+		e.visible = false
 	if is_defense:
 		_update_planet_panel()
 	if is_duel:
@@ -270,10 +303,14 @@ func _next_item() -> void:
 			_subtitle.text = "Mémorise, puis appuie sur un bouton"
 			_enemy_speed = 0.0
 		LearningEngine.MODE_QCM:
-			for i in range(4):
-				_cannons[i].visible = true
-				_cannon_labels[i].text = str(item["options"][i])
-			_enemy_speed = _speed_for(item, 2.6)
+			_inverted = int(item.get("box", 0)) >= 2 and not is_duel and _rng.randf() < INVERTED_CHANCE
+			if _inverted:
+				_start_inverted_wave()
+			else:
+				for i in range(4):
+					_cannons[i].visible = true
+					_cannon_labels[i].text = str(item["options"][i])
+			_enemy_speed = _speed_for(item, 2.6 if not _inverted else 3.2)
 		LearningEngine.MODE_WHEEL:
 			_wheel.visible = true
 			_enemy_speed = _speed_for(item, 2.2 if item["state"] == "mastered" else 3.0)
@@ -309,10 +346,12 @@ func _process(delta: float) -> void:
 	if phase == Phase.ACTIVE:
 		_move_ship(delta)
 		_enemy.position.y += _enemy_speed * delta
+		for e in _swarm:
+			e.position.y += _enemy_speed * delta
 		if item["mode"] == LearningEngine.MODE_PRESENTATION:
 			if Time.get_ticks_msec() - _item_start_ms >= PRESENTATION_SEC * 1000:
 				_acknowledge_presentation()
-		elif _enemy.position.y >= ENEMY_HIT_Y:
+		elif _front_y() >= ENEMY_HIT_Y:
 			_enemy_reached_ship()
 		_update_wheel_selection()
 	elif phase == Phase.FEEDBACK:
@@ -437,6 +476,10 @@ func _poll_input() -> void:
 			if Input.is_action_just_pressed("tir"):
 				_acknowledge_presentation()
 		LearningEngine.MODE_QCM:
+			if _inverted:
+				if Input.is_action_just_pressed("tir") or Input.is_action_just_pressed("canon_A"):
+					fire_inverted()
+				return
 			for i in range(4):
 				if Input.is_action_just_pressed(UI.BUTTON_ACTIONS[UI.BUTTON_ORDER[i]]):
 					press_cannon(i)
@@ -495,7 +538,86 @@ func press_cannon(index: int) -> void:
 			recent += 1
 	var answer: int = item["options"][index]
 	Sfx.play("shoot")
+	_spawn_tracer(_ship.position + Vector2(0, -16), _enemy.position, UI.BUTTON_COLORS[UI.BUTTON_ORDER[index]])
 	_submit(answer, {"mashing": recent >= 3})
+
+
+## Vague inversée : le calcul passe sur le vaisseau, les 4 nombres sur une nuée.
+func _start_inverted_wave() -> void:
+	_enemy.visible = false
+	_ship_label.text = item["question"]
+	_ship_label.visible = true
+	_subtitle.text = "Place-toi sous le bon nombre et tire"
+	var slots := [0, 1, 2, 3]
+	_shuffle_slots(slots)
+	_swarm_values = []
+	for i in range(4):
+		var e: Node2D = _swarm[i]
+		var x: float = 100.0 + float(slots[i]) * (W - 200.0) / 3.0 + _rng.randf_range(-12, 12)
+		e.position = Vector2(x, ENEMY_START_Y + _rng.randf_range(0, 10))
+		e.scale = Vector2.ONE
+		e.get_child(0).modulate = Color.WHITE
+		e.visible = true
+		var value: int = item["options"][i]
+		_swarm_labels[i].text = str(value)
+		_swarm_values.append(value)
+
+
+func _shuffle_slots(arr: Array) -> void:
+	for i in range(arr.size() - 1, 0, -1):
+		var j := _rng.randi_range(0, i)
+		var tmp = arr[i]
+		arr[i] = arr[j]
+		arr[j] = tmp
+
+
+## Tir vertical depuis le vaisseau : touche l'ennemi aligné, sinon rate (sans pénalité).
+func fire_inverted() -> void:
+	if phase != Phase.ACTIVE or not _inverted:
+		return
+	Sfx.play("shoot")
+	var best: Node2D = null
+	var best_dx := SWARM_HIT_HALF_WIDTH
+	for e in _swarm:
+		if not e.visible:
+			continue
+		var dx: float = absf(e.position.x - _ship.position.x)
+		if dx <= best_dx:
+			best_dx = dx
+			best = e
+	var top := Vector2(_ship.position.x, best.position.y if best != null else 0.0)
+	_spawn_tracer(_ship.position + Vector2(0, -16), top, UI.ACCENT)
+	if best == null:
+		_message.text = "Raté !"
+		return
+	_target = best
+	var answer: int = _swarm_values[_swarm.find(best)]
+	_submit(answer, {"variant": "inverted"})
+
+
+## Position de ce qui vient d'être touché (explosion) et avant de la vague.
+func _target_position() -> Vector2:
+	return _target.position if _target != null else _enemy.position
+
+
+func _front_y() -> float:
+	if not _inverted:
+		return _enemy.position.y
+	var y := 0.0
+	for e in _swarm:
+		if e.visible:
+			y = maxf(y, e.position.y)
+	return y
+
+
+## Traceur de tir : une ligne de points du vaisseau vers la cible, visuel seulement.
+func _spawn_tracer(from: Vector2, to: Vector2, color: Color) -> void:
+	var steps := 6
+	for i in range(steps):
+		var r := UI.rect(color, Vector2(3, 6))
+		r.position = from.lerp(to, float(i) / steps)
+		add_child(r)
+		_particles.append({"node": r, "vel": (to - from).normalized() * 500.0, "life": 0.12 + i * 0.03})
 
 
 ## Roue (3) : on compose la réponse chiffre par chiffre, puis on tire.
@@ -588,8 +710,12 @@ func _wrong_hit(_answer: int, first: bool) -> void:
 	_shield_blink_left = 0.6
 	_hull.modulate = Color.WHITE
 	Sfx.play("error")
-	_enemy.scale = _enemy.scale * 1.15
-	_enemy_body.modulate = Color(1.3, 0.6, 0.6)
+	if _inverted and _target != null:
+		_target.scale = _target.scale * 1.15
+		_target.get_child(0).modulate = Color(1.3, 0.6, 0.6)
+	else:
+		_enemy.scale = _enemy.scale * 1.15
+		_enemy_body.modulate = Color(1.3, 0.6, 0.6)
 	_message.text = "Ennemi renforcé"
 	var expected: int = _decomp_remaining if _decomp_remaining >= 0 else int(item["answer"])
 	_subtitle.text = "Réponse : %d" % expected if (shield <= 0 or not first) else "Essaie encore"
@@ -619,7 +745,7 @@ func _resolve(success: bool, text: String, reward: bool) -> void:
 	_message.text = text
 	if success and item["mode"] != LearningEngine.MODE_PRESENTATION:
 		# Explosion satisfaisante, son net et positif, courte vibration (8).
-		_spawn_explosion(_enemy.position, UI.ACCENT if reward else UI.GREY)
+		_spawn_explosion(_target_position(), UI.ACCENT if reward else UI.GREY)
 		if reward:
 			combo += 1
 			best_combo = maxi(best_combo, combo)
@@ -644,6 +770,9 @@ func _resolve(success: bool, text: String, reward: bool) -> void:
 				var advanced: bool = int(_last_outcome.get("box", 0)) > int(item.get("box", 0))
 				_subtitle.text = "Planète %s sauvée%s" % [UI.fact_text(item["fact"]), " : intervalle allongé !" if advanced else ""]
 	_enemy.visible = false
+	for e in _swarm:
+		e.visible = false
+	_ship_label.visible = false
 	for c in _cannons:
 		c.visible = false
 	_wheel.visible = false

@@ -559,7 +559,8 @@ func _weak_orientation(fs: FactState) -> String:
 # ---------------------------------------------------------------------------
 
 ## Le jeu renvoie la réponse donnée et le temps en millisecondes.
-## `flags` optionnel : {"mashing": true} si un mitraillage de boutons a été détecté.
+## `flags` optionnel : {"mashing": true} si un mitraillage de boutons a été détecté,
+## {"variant": "inverted"} pour journaliser la présentation choisie par le jeu.
 ## Retourne l'issue : correct, fast, suspicious, old_state, new_state, box…
 func report_result(item: Dictionary, given_answer: int, time_ms: int, flags: Dictionary = {}) -> Dictionary:
 	assert(session_active, "start_session() doit être appelé avant report_result()")
@@ -586,6 +587,7 @@ func report_result(item: Dictionary, given_answer: int, time_ms: int, flags: Dic
 		"target_time_ms": item["target_time_ms"],
 		"due": item.get("is_due", false),
 		"context": item.get("context", {}).get("type", ""),
+		"variant": str(flags.get("variant", "")),
 	}
 	journal.append(entry)
 	var outcome := _ingest_entry(fs, entry)

@@ -46,6 +46,7 @@ clavier reste disponible en secours.
 | Action | Manette Xbox | Clavier |
 | --- | --- | --- |
 | Tirer avec un canon (QCM) | A / B / X / Y | A / B / X / Y |
+| Calcul inversé : se placer sous le bon nombre, tirer | Stick gauche, puis RT ou A | Flèches, puis Espace ou A |
 | Choisir un chiffre sur la roue | Stick droit | — |
 | Ajouter le chiffre choisi | RT (ou RB) | Espace / Entrée, ou touches 0 à 9 |
 | Tirer le nombre composé (roue) | A | A |
@@ -56,6 +57,12 @@ clavier reste disponible en secours.
 | Options : régler une valeur | Croix ou stick gauche gauche/droite | Flèches gauche/droite |
 | Pause | Start | Échap |
 | Écran parent (depuis le hub) | Back | P |
+
+Le calcul inversé (§3 du document) est une variante de vague : le vaisseau porte
+le calcul, une nuée de quatre ennemis porte les nombres, et il faut se déplacer
+sous le bon pour l'abattre. Un tir dans le vide ne coûte rien. Elle tombe sur
+environ 40 % des items QCM dont la boîte est au moins 2, jamais lors d'une
+première rencontre ni en duel (`INVERTED_CHANCE` dans `mission.gd`).
 
 Les menus sont sondés avec détection de front et répétition temporisée
 (`game/ui/menu_nav.gd`) : un stick incliné ne fait qu'un pas, puis répète

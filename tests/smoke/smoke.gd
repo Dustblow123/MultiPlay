@@ -192,6 +192,44 @@ func _run() -> void:
 				_check(img.get_pixel(x, y) != Color.MAGENTA, "caractère inconnu dans le sprite " + name)
 	_check(PixelArt.texture("ship", {"h": Color.RED}).get_image().get_pixel(5, 0) == Color.RED, "la couleur de coque se remplace")
 
+	# Calcul inversé : nuée de 4 nombres, tir aligné, raté sans pénalité.
+	for key in ["3x6", "4x6", "6x7"]:
+		var fs3: FactState = Game.engine.states[key]
+		fs3.state = FactState.State.LEARNING
+		fs3.box = 3
+	Game.mission_context = {"type": LearningEngine.MISSION_EXPLORATION}
+	var inv: Node = load("res://game/mission/mission.tscn").instantiate()
+	add_child(inv)
+	await get_tree().process_frame
+	var tries := 0
+	while not (inv.phase == inv.Phase.ACTIVE and inv.item["mode"] == LearningEngine.MODE_QCM and inv.item["box"] >= 2) and tries < 40:
+		tries += 1
+		if inv.phase == inv.Phase.ACTIVE:
+			inv._report(inv.item["answer"], {})
+			inv._resolve(true, "", false)
+		for _i in range(3):
+			inv._process(0.3)
+			await get_tree().process_frame
+	if inv.phase == inv.Phase.ACTIVE:
+		inv.item["box"] = 3
+		inv._inverted = true
+		inv._start_inverted_wave()
+		_check(inv._ship_label.visible and inv._swarm[0].visible, "le vaisseau porte le calcul, la nuée les nombres")
+		var shield_before: int = inv.shield
+		inv._ship.position.x = 5.0  # loin de tout ennemi
+		inv.fire_inverted()
+		_check(inv.phase == inv.Phase.ACTIVE and inv.shield == shield_before, "un tir dans le vide ne coûte rien")
+		var correct_index: int = inv._swarm_values.find(inv.item["answer"])
+		inv._ship.position.x = inv._swarm[correct_index].position.x
+		inv._item_start_ms = Time.get_ticks_msec() - 1500  # au-delà du seuil anti-hasard
+		inv.fire_inverted()
+		_check(inv.phase == inv.Phase.FEEDBACK and inv.combo >= 1, "tir aligné sur le bon nombre : réussite")
+		_check(Game.engine.journal[-1].get("variant", "") == "inverted", "la variante est journalisée")
+	else:
+		_check(false, "aucun item QCM obtenu pour tester le calcul inversé")
+	inv.queue_free()
+	await get_tree().process_frame
+
 	# Sauvegarde puis rechargement du profil.
 	Game.save()
 	var loaded := ProfileStore.load_profile("smoke_test_profile")
