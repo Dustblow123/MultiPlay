@@ -64,6 +64,11 @@ sous le bon pour l'abattre. Un tir dans le vide ne coûte rien. Elle tombe sur
 environ 40 % des items QCM dont la boîte est au moins 2, jamais lors d'une
 première rencontre ni en duel (`INVERTED_CHANCE` dans `mission.gd`).
 
+Les nuées rapides (§4.3) concernent les faits maîtrisés : jusqu'à trois ennemis
+portant chacun un calcul descendent ensemble ; on compose la réponse à la roue,
+on se place sous l'ennemi visé et on tire. Toujours en arène, une fois sur deux
+ailleurs, dès que quatre faits sont maîtrisés (`WAVE_*` dans `mission.gd`).
+
 Les menus sont sondés avec détection de front et répétition temporisée
 (`game/ui/menu_nav.gd`) : un stick incliné ne fait qu'un pas, puis répète
 lentement si on le maintient, et doit revenir au neutre à l'ouverture d'un

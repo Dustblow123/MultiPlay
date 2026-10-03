@@ -135,9 +135,18 @@ func _run() -> void:
 		var g := 0
 		while m.phase != m.Phase.DONE and g < 300:
 			g += 1
-			if m.phase == m.Phase.ACTIVE:
+			if m.phase == m.Phase.ACTIVE and not m._wave.is_empty():
+				for w in m._wave:
+					w["start_ms"] = Time.get_ticks_msec() - 1500
+					_check(w["item"]["state"] == "mastered", "nuée : faits maîtrisés seulement")
+					m._ship.position.x = w["node"].position.x
+					for ch in str(w["item"]["answer"]):
+						m.wheel_add_digit(int(ch))
+					m.wheel_fire()
+			elif m.phase == m.Phase.ACTIVE:
 				var it: Dictionary = m.item
 				_check(it["state"] == "mastered", "%s : faits maîtrisés seulement" % ctx["type"])
+				m._item_start_ms = Time.get_ticks_msec() - 1500
 				match it["mode"]:
 					LearningEngine.MODE_QCM:
 						m.press_cannon(it["options"].find(it["answer"]))
@@ -191,6 +200,33 @@ func _run() -> void:
 			for x in range(img.get_width()):
 				_check(img.get_pixel(x, y) != Color.MAGENTA, "caractère inconnu dans le sprite " + name)
 	_check(PixelArt.texture("ship", {"h": Color.RED}).get_image().get_pixel(5, 0) == Color.RED, "la couleur de coque se remplace")
+
+	# Nuée rapide : plusieurs faits maîtrisés à la fois, tir du nombre composé sur l'ennemi aligné.
+	Game.mission_context = {"type": LearningEngine.MISSION_ARENA}
+	var wave_mission: Node = load("res://game/mission/mission.tscn").instantiate()
+	add_child(wave_mission)
+	await get_tree().process_frame
+	_check(wave_mission._wave.size() >= 2, "en arène, les faits maîtrisés arrivent en nuée (obtenu %d)" % wave_mission._wave.size())
+	if wave_mission._wave.size() >= 2:
+		var consumed: int = wave_mission.item_index
+		_check(consumed == wave_mission._wave.size(), "la nuée consomme autant d'items que d'ennemis")
+		for w in wave_mission._wave:
+			w["start_ms"] = Time.get_ticks_msec() - 2000
+		var first: Dictionary = wave_mission._wave[0]
+		wave_mission._ship.position.x = first["node"].position.x
+		for ch in str(int(first["item"]["answer"]) + 1):
+			wave_mission.wheel_add_digit(int(ch))
+		wave_mission.wheel_fire()
+		_check(not first["done"] and first["wrong"] and wave_mission.shield == Game.SHIELD_MAX - 1, "mauvais nombre : ennemi renforcé, bouclier -1")
+		for w in wave_mission._wave:
+			wave_mission._ship.position.x = w["node"].position.x
+			for ch in str(w["item"]["answer"]):
+				wave_mission.wheel_add_digit(int(ch))
+			wave_mission.wheel_fire()
+		_check(wave_mission.phase == wave_mission.Phase.FEEDBACK, "nuée repoussée quand tous les ennemis sont abattus")
+		_check(Game.engine.journal[-1].get("variant", "") == "wave", "la nuée est journalisée")
+	wave_mission.queue_free()
+	await get_tree().process_frame
 
 	# Calcul inversé : nuée de 4 nombres, tir aligné, raté sans pénalité.
 	for key in ["3x6", "4x6", "6x7"]:

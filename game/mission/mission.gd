@@ -86,6 +86,12 @@ var _target: Node2D
 var _ship_label: Label
 const SWARM_HIT_HALF_WIDTH := 34.0
 const INVERTED_CHANCE := 0.4
+## Nuée rapide (4.3) : plusieurs faits maîtrisés à la fois, réponse à la roue,
+## tir sur l'ennemi aligné. Chaque entrée : {item, node, label, reported, wrong, start_ms, done}.
+var _wave: Array = []
+const WAVE_SIZE := 3
+const WAVE_CHANCE := 0.5
+const WAVE_MIN_MASTERED := 4
 var _planet_shield: Array = []
 var _last_outcome: Dictionary = {}
 var _intro_shown: bool = false
@@ -275,6 +281,7 @@ func _next_item() -> void:
 	_enemy_label.text = item["question"]
 	_last_outcome = {}
 	_inverted = false
+	_wave = []
 	_target = null
 	_ship_label.visible = false
 	for e in _swarm:
@@ -316,6 +323,10 @@ func _next_item() -> void:
 			_enemy_speed = _speed_for(item, 2.2 if item["state"] == "mastered" else 3.0)
 			if is_arena:
 				_enemy_speed *= 1.3
+			if item["state"] == "mastered" and not is_duel and not is_boss \
+					and Game.engine.counts_by_state()["mastered"] >= WAVE_MIN_MASTERED \
+					and (is_arena or _rng.randf() < WAVE_CHANCE):
+				_start_wave()
 		LearningEngine.MODE_DECOMPOSITION:
 			_wheel.visible = true
 			_subtitle.text = "Décompose : tire un facteur"
@@ -595,13 +606,139 @@ func fire_inverted() -> void:
 	_submit(answer, {"variant": "inverted"})
 
 
+## Nuée rapide : l'item courant plus d'autres faits maîtrisés demandés au moteur.
+func _start_wave() -> void:
+	_enemy.visible = false
+	var items: Array = [item]
+	var extra := mini(WAVE_SIZE, items_total - item_index + 1) - 1
+	for _i in range(extra):
+		var it := Game.engine.next_item({"type": LearningEngine.MISSION_ARENA})
+		if it["mode"] != LearningEngine.MODE_WHEEL:
+			# Pas assez de faits maîtrisés disponibles : on reste sur l'item seul.
+			Game.engine.report_result(it, -1, 0)
+			break
+		items.append(it)
+		item_index += 1
+	if items.size() == 1:
+		_enemy.visible = true
+		return
+	var slots := range(items.size())
+	_shuffle_slots(slots)
+	_wave = []
+	var now := Time.get_ticks_msec()
+	for i in range(items.size()):
+		var e: Node2D = _swarm[i]
+		var x: float = 110.0 + float(slots[i]) * (W - 220.0) / float(items.size() - 1)
+		e.position = Vector2(x, ENEMY_START_Y + _rng.randf_range(0, 12))
+		e.scale = Vector2.ONE
+		e.get_child(0).modulate = Color.WHITE
+		e.visible = true
+		_swarm_labels[i].text = items[i]["question"]
+		_wave.append({"item": items[i], "node": e, "label": _swarm_labels[i], "reported": false, "wrong": false, "start_ms": now, "done": false})
+	_subtitle.text = "Nuée ! Compose, place-toi sous l'ennemi visé et tire"
+	Sfx.play("combo", 1.3)
+
+
+## Tir d'un nombre composé sur l'ennemi aligné de la nuée.
+func fire_wave(value: int) -> void:
+	var entry: Dictionary = {}
+	var best_dx := SWARM_HIT_HALF_WIDTH
+	for w in _wave:
+		if w["done"]:
+			continue
+		var dx: float = absf(w["node"].position.x - _ship.position.x)
+		if dx <= best_dx:
+			best_dx = dx
+			entry = w
+	var top := Vector2(_ship.position.x, entry["node"].position.y if not entry.is_empty() else 0.0)
+	_spawn_tracer(_ship.position + Vector2(0, -16), top, UI.ACCENT)
+	if entry.is_empty():
+		_message.text = "Raté !"
+		return
+	var it: Dictionary = entry["item"]
+	var correct: bool = it["accepted"].has(value)
+	var outcome := {}
+	if not entry["reported"]:
+		entry["reported"] = true
+		outcome = _report_item(it, entry["start_ms"], value, {"variant": "wave"})
+	_target = entry["node"]
+	if correct:
+		entry["done"] = true
+		entry["node"].visible = false
+		_spawn_explosion(entry["node"].position, UI.ACCENT if outcome.get("stardust", 0) > 0 else UI.GREY)
+		if outcome.get("stardust", 0) > 0:
+			combo += 1
+			best_combo = maxi(best_combo, combo)
+			stardust += 1
+			Game.profile.stardust += 1
+			Game.vibrate()
+			_hull.modulate = Color.WHITE.lerp(Color(1.6, 1.6, 1.2), minf(combo, 6) / 6.0)
+			if is_arena:
+				score += 10 * mini(combo, 10) + (5 if outcome.get("fast", false) else 0)
+			Sfx.play("fast" if outcome.get("fast", false) else "good", 1.0 + 0.03 * minf(combo, 10))
+			_message.text = "Rapide !" if outcome.get("fast", false) else "Juste !"
+		if _wave_done():
+			_resolve_wave()
+	else:
+		entry["wrong"] = true
+		_wrong_hit(value, true)
+		_subtitle.text = "Réponse : %d" % it["answer"] if shield <= 0 else "Essaie encore : %s" % it["question"]
+
+
+func _wave_done() -> bool:
+	for w in _wave:
+		if not w["done"]:
+			return false
+	return true
+
+
+func _resolve_wave() -> void:
+	phase = Phase.FEEDBACK
+	_feedback_left = FEEDBACK_SEC
+	Engine.time_scale = 1.0
+	_message.text = "Nuée repoussée !" if shield > 0 else "Bouclier à zéro : retraite"
+	if combo >= 3:
+		_subtitle.text = "Combo ×%d" % combo
+	for w in _wave:
+		w["node"].visible = false
+	_wheel.visible = false
+	_update_hud()
+
+
+## La nuée atteint le vaisseau : les calculs restants sont manqués, un seul point de bouclier.
+func _wave_reached_ship() -> void:
+	var missed: Array = []
+	for w in _wave:
+		if w["done"]:
+			continue
+		if not w["reported"]:
+			w["reported"] = true
+			_report_item(w["item"], w["start_ms"], -1, {"variant": "wave"})
+		missed.append("%s = %d" % [w["item"]["question"], w["item"]["answer"]])
+		w["done"] = true
+	combo = 0
+	shield -= 1
+	_shield_blink_left = 0.6
+	_hull.modulate = Color.WHITE
+	Sfx.play("hit")
+	_update_hud()
+	phase = Phase.FEEDBACK
+	_feedback_left = FEEDBACK_SEC + 0.6
+	Engine.time_scale = 1.0
+	_message.text = "La nuée est passée"
+	_subtitle.text = "  ·  ".join(missed)
+	for w in _wave:
+		w["node"].visible = false
+	_wheel.visible = false
+
+
 ## Position de ce qui vient d'être touché (explosion) et avant de la vague.
 func _target_position() -> Vector2:
 	return _target.position if _target != null else _enemy.position
 
 
 func _front_y() -> float:
-	if not _inverted:
+	if not _inverted and _wave.is_empty():
 		return _enemy.position.y
 	var y := 0.0
 	for e in _swarm:
@@ -645,6 +782,9 @@ func wheel_fire() -> void:
 	_composed = ""
 	_update_composed()
 	Sfx.play("shoot")
+	if not _wave.is_empty():
+		fire_wave(value)
+		return
 	_submit(value, {})
 
 
@@ -677,12 +817,16 @@ func _submit(answer: int, flags: Dictionary) -> void:
 
 func _report(answer: int, flags: Dictionary) -> Dictionary:
 	_reported = true
-	var outcome := Game.engine.report_result(item, answer, _elapsed_ms(), flags)
+	return _report_item(item, _item_start_ms, answer, flags)
+
+
+func _report_item(it: Dictionary, start_ms: int, answer: int, flags: Dictionary) -> Dictionary:
+	var outcome := Game.engine.report_result(it, answer, Time.get_ticks_msec() - start_ms, flags)
 	_last_outcome = outcome
 	if outcome["mastered_now"]:
-		mastered_keys.append(item["fact"])
-	if item["mode"] == LearningEngine.MODE_PRESENTATION:
-		new_keys.append(item["fact"])
+		mastered_keys.append(it["fact"])
+	if it["mode"] == LearningEngine.MODE_PRESENTATION:
+		new_keys.append(it["fact"])
 	elif outcome["correct"] and not outcome["suspicious"]:
 		correct_count += 1
 		if outcome["fast"]:
@@ -725,6 +869,9 @@ func _wrong_hit(_answer: int, first: bool) -> void:
 
 
 func _enemy_reached_ship() -> void:
+	if not _wave.is_empty():
+		_wave_reached_ship()
+		return
 	if not _reported:
 		_report(-1, {})
 	combo = 0
