@@ -182,6 +182,16 @@ func _run() -> void:
 	defense.queue_free()
 	await get_tree().process_frame
 
+	# Pixel art : chaque sprite se convertit en texture, sans pixel magenta (couleur inconnue).
+	for name in PixelArt.SPRITES:
+		var tex := PixelArt.texture(name)
+		_check(tex.get_width() > 0 and tex.get_height() > 0, "texture vide : " + name)
+		var img := tex.get_image()
+		for y in range(img.get_height()):
+			for x in range(img.get_width()):
+				_check(img.get_pixel(x, y) != Color.MAGENTA, "caractère inconnu dans le sprite " + name)
+	_check(PixelArt.texture("ship", {"h": Color.RED}).get_image().get_pixel(5, 0) == Color.RED, "la couleur de coque se remplace")
+
 	# Sauvegarde puis rechargement du profil.
 	Game.save()
 	var loaded := ProfileStore.load_profile("smoke_test_profile")

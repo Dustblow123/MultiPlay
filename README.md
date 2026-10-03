@@ -68,7 +68,10 @@ zone morte du stick (avec une roue de test), les vibrations et les sons se
 règlent dans l'écran Options du hub et sont enregistrés dans le profil.
 
 Les effets sonores sont des ondes carrées et triangulaires générées en code au
-démarrage (`game/autoload/sfx.gd`) : aucun asset audio pour l'instant.
+démarrage (`game/autoload/sfx.gd`), et les sprites (vaisseau, ennemis, pirates,
+Confondeur, boss, planètes) sont du pixel art défini en ASCII et converti en
+textures au démarrage (`game/gfx/pixel_art.gd`) : aucun asset binaire pour
+l'instant. Les packs Kenney restent la piste pour des graphismes plus riches.
 
 ## Architecture en trois couches
 
@@ -88,6 +91,7 @@ game/          Jeu : demande le prochain calcul, renvoie le résultat
   mission/ship_view.gd dessin du vaisseau : coque, ailes-trophées, autocollant
   ui/                  résultats, écran parent, options, vaisseau et cosmétiques, navigation
   autoload/sfx.gd      effets rétro générés en code
+  gfx/pixel_art.gd     sprites en pixel art définis en ASCII
 tests/         Tests unitaires, simulation d'élèves fictifs, test de fumée
 ```
 

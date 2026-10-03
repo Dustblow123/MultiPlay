@@ -50,7 +50,7 @@ var _paused_label: Label
 var _ship: Node2D
 var _enemy: Node2D
 var _enemy_label: Label
-var _enemy_body: Polygon2D
+var _enemy_body: Sprite2D
 var _cannons: Array = []
 var _cannon_labels: Array = []
 var _wheel: Node2D
@@ -65,8 +65,7 @@ var _rng := RandomNumberGenerator.new()
 var _stars: Array = []
 var _particles: Array = []
 var _shield_blink_left: float = 0.0
-var _hull: Polygon2D
-var _hull_color: Color = UI.GREY
+var _hull: Sprite2D
 var _trail_left: float = 0.0
 ## Arène (6) : score, combos, records personnels.
 var score: int = 0
@@ -114,16 +113,13 @@ func _build_scene() -> void:
 	_ship = Node2D.new()
 	_ship.position = Vector2(W / 2.0, SHIP_Y)
 	_hull = ShipView.build(_ship, Game.profile)
-	_hull_color = _hull.color
 	add_child(_ship)
 
 	_enemy = Node2D.new()
-	_enemy_body = Polygon2D.new()
-	_enemy_body.polygon = PackedVector2Array([Vector2(-34, -16), Vector2(34, -16), Vector2(40, 0), Vector2(34, 16), Vector2(-34, 16), Vector2(-40, 0)])
-	_enemy_body.color = UI.DARK_GREY
+	_enemy_body = PixelArt.sprite("enemy", {}, 3.0)
 	_enemy.add_child(_enemy_body)
 	_enemy_label = UI.big_number("", 26)
-	_enemy_label.position = Vector2(-60, -18)
+	_enemy_label.position = Vector2(-60, -2)
 	_enemy_label.size = Vector2(120, 36)
 	_enemy.add_child(_enemy_label)
 	_enemy.visible = false
@@ -246,7 +242,7 @@ func _next_item() -> void:
 	_tip_label.text = Crew.tip_for_item(item, Game.profile.unlocks["crew"])
 	_enemy.position = Vector2(_rng.randf_range(120, W - 120), ENEMY_START_Y)
 	_enemy.scale = Vector2.ONE
-	_enemy_body.color = UI.DARK_GREY
+	_set_enemy_look("enemy")
 	_enemy.visible = true
 	_enemy_label.text = item["question"]
 	_last_outcome = {}
@@ -254,7 +250,7 @@ func _next_item() -> void:
 		_update_planet_panel()
 	if is_duel:
 		# Le Confondeur (6) : ennemi spécial, violet, qui alterne les deux calculs confondus.
-		_enemy_body.color = Color(0.45, 0.25, 0.6)
+		_set_enemy_look("confondeur")
 		if not _intro_shown and context.has("pair"):
 			_intro_shown = true
 			_message.text = "LE CONFONDEUR"
@@ -269,7 +265,7 @@ func _next_item() -> void:
 			# Première rencontre en « scan » : calcul + réponse affichés (6).
 			Sfx.play("scan")
 			_enemy_label.text = "%s = %d" % [item["question"], item["answer"]]
-			_enemy_body.color = Color(0.2, 0.3, 0.45)
+			_set_enemy_look("enemy", Color(0.6, 0.8, 1.2))
 			_message.text = "SCAN : nouvelle planète"
 			_subtitle.text = "Mémorise, puis appuie sur un bouton"
 			_enemy_speed = 0.0
@@ -369,11 +365,18 @@ func _update_planet_panel() -> void:
 	var status: String = {"dark": "inconnue", "orbit": "en orbite", "colonized": "colonisée", "besieged": "assiégée"}[Game.engine.planet_status(fs)]
 	if item.get("is_due", false):
 		_planet_label.text = "Pirates sur la planète %s (%s) !" % [UI.fact_text(item["fact"]), status]
-		_enemy_body.color = Color(0.5, 0.2, 0.2)
+		_set_enemy_look("pirate")
 	else:
 		_planet_label.text = "Patrouille : planète %s (%s)" % [UI.fact_text(item["fact"]), status]
 	for i in range(_planet_shield.size()):
 		_planet_shield[i].color = Color("60a5fa") if i < shield else Color(0.25, 0.25, 0.3)
+
+
+func _set_enemy_look(kind: String, tint: Color = Color.WHITE) -> void:
+	_enemy_body.texture = PixelArt.texture(kind)
+	_enemy_body.modulate = tint
+	# Le calcul reste au premier plan, sous le vaisseau ennemi.
+	_enemy_label.position = Vector2(-60, 4 if kind == "boss" else -2)
 
 
 func outcome_fast_hint(text: String) -> bool:
@@ -401,8 +404,8 @@ func _update_boss_bar() -> void:
 	var table: int = context["tables"][0]
 	var phases := ["Phase 1 : points faibles", "Phase 2 : décomposition", "Phase 3 : rafale finale"]
 	_boss_label.text = "%s  ·  %s" % [Hub.boss_name_of(table).split(" :")[0], phases[_boss_phase]]
-	_enemy_body.color = Color(0.45, 0.2, 0.3)
-	_enemy.scale = Vector2(1.4, 1.4) if _boss_phase < 2 else Vector2(1.0, 1.0)
+	_set_enemy_look("boss")
+	_enemy.scale = Vector2(1.2, 1.2) if _boss_phase < 2 else Vector2(0.9, 0.9)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -583,10 +586,10 @@ func _wrong_hit(_answer: int, first: bool) -> void:
 	shield -= 1
 	_wrong_this_item = true
 	_shield_blink_left = 0.6
-	_hull.color = _hull_color
+	_hull.modulate = Color.WHITE
 	Sfx.play("error")
 	_enemy.scale = _enemy.scale * 1.15
-	_enemy_body.color = Color(0.5, 0.3, 0.3)
+	_enemy_body.modulate = Color(1.3, 0.6, 0.6)
 	_message.text = "Ennemi renforcé"
 	var expected: int = _decomp_remaining if _decomp_remaining >= 0 else int(item["answer"])
 	_subtitle.text = "Réponse : %d" % expected if (shield <= 0 or not first) else "Essaie encore"
@@ -603,7 +606,7 @@ func _enemy_reached_ship() -> void:
 	if not _wrong_this_item:
 		shield -= 1
 		_shield_blink_left = 0.6
-	_hull.color = _hull_color
+	_hull.modulate = Color.WHITE
 	Sfx.play("hit")
 	_update_hud()
 	_resolve(false, "La planète est assiégée (réponse : %d)" % item["answer"], false)
@@ -624,7 +627,7 @@ func _resolve(success: bool, text: String, reward: bool) -> void:
 			Game.profile.stardust += 1
 			Game.vibrate()
 			# Série de réussites : le vaisseau s'illumine, la musique s'intensifie.
-			_hull.color = _hull_color.lerp(Color.WHITE, minf(combo, 6) / 8.0)
+			_hull.modulate = Color.WHITE.lerp(Color(1.6, 1.6, 1.2), minf(combo, 6) / 6.0)
 			if is_arena:
 				# Score d'arène : 10 points × combo (plafonné à 10), bonus de rapidité.
 				score += 10 * mini(combo, 10) + (5 if outcome_fast_hint(text) else 0)

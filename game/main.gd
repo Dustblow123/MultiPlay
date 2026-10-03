@@ -11,7 +11,7 @@ func _ready() -> void:
 	UI.fill_background(self)
 	var v := UI.vbox(self, Vector2(40, 24), 6)
 	v.add_child(UI.label("CONQUÊTE DES TABLES", 30, UI.ACCENT))
-	v.add_child(UI.label("Prototype · formes grises, aucun asset", 12, UI.MUTED))
+	v.add_child(UI.label("Prototype · pixel art généré en code, aucun asset externe", 12, UI.MUTED))
 	v.add_child(UI.label(" ", 8))
 	v.add_child(UI.label("Qui joue ?", 18))
 	_list = UI.vbox(self, Vector2(40, 120), 2)

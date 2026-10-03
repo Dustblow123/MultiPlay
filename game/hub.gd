@@ -52,15 +52,17 @@ func _build_galaxy_map() -> void:
 		h.add_child(name)
 		for key in system["facts"]:
 			var planet: Dictionary = system["facts"][key]
-			var cell := UI.rect(UI.PLANET_COLORS[planet["status"]], Vector2(14, 14))
+			var cell := Control.new()
+			cell.custom_minimum_size = Vector2(16, 16)
+			var sprite := PixelArt.planet_sprite(planet["status"], 1.0)
+			sprite.position = Vector2(8, 8)
+			cell.add_child(sprite)
 			if planet["due"]:
-				# Planète attaquée par les pirates : contour clair.
-				var outline := UI.rect(Color.WHITE, Vector2(16, 16))
-				outline.add_child(cell)
-				cell.position = Vector2(1, 1)
-				h.add_child(outline)
-			else:
-				h.add_child(cell)
+				# Planète attaquée par les pirates : drapeau noir.
+				var flag := PixelArt.sprite("flag", {}, 1.0)
+				flag.position = Vector2(12, 3)
+				cell.add_child(flag)
+			h.add_child(cell)
 		var status := "%d/%d" % [system["colonized"], system["total"]]
 		if system["complete"]:
 			status += "  BOSS prêt" if not _boss_beaten(table) else "  libéré"
@@ -70,7 +72,12 @@ func _build_galaxy_map() -> void:
 	var legend := UI.hbox(v, 8)
 	for entry in [["sombre", "dark"], ["en orbite", "orbit"], ["colonisée", "colonized"], ["assiégée", "besieged"]]:
 		var h2 := UI.hbox(legend, 3)
-		h2.add_child(UI.rect(UI.PLANET_COLORS[entry[1]], Vector2(10, 10)))
+		var icon := Control.new()
+		icon.custom_minimum_size = Vector2(12, 12)
+		var ps := PixelArt.planet_sprite(entry[1], 1.0)
+		ps.position = Vector2(6, 6)
+		icon.add_child(ps)
+		h2.add_child(icon)
 		h2.add_child(UI.label(entry[0], 10, UI.MUTED))
 
 

@@ -1,22 +1,21 @@
 class_name ShipView
 extends RefCounted
-## Dessin du vaisseau en formes grises : coque (couleur achetée), ailes
-## (une par boss vaincu, trophées visibles), autocollant.
+## Dessin du vaisseau en pixel art : coque (couleur achetée), ailes (une par
+## boss vaincu, trophées visibles), autocollant.
+
+const SCALE := 2.0
 
 
 ## Construit les nœuds du vaisseau dans `parent` et retourne la coque.
-static func build(parent: Node2D, profile: Profile) -> Polygon2D:
+static func build(parent: Node2D, profile: Profile) -> Sprite2D:
 	var parts: int = profile.unlocks["ship_parts"].size()
 	for i in range(mini(parts, 4)):
 		for side in [-1, 1]:
-			var wing := Polygon2D.new()
-			var dx := 14 + i * 5
-			wing.polygon = PackedVector2Array([Vector2(side * 6, 4 - i * 2), Vector2(side * dx, 12 - i * 2), Vector2(side * 6, 12 - i * 2)])
-			wing.color = Color("6b7280")
+			var wing := PixelArt.sprite("wing", {}, SCALE)
+			wing.flip_h = side < 0
+			wing.position = Vector2(side * (12 + i * 4), 8 - i * 3)
 			parent.add_child(wing)
-	var hull := Polygon2D.new()
-	hull.polygon = PackedVector2Array([Vector2(0, -16), Vector2(14, 12), Vector2(0, 6), Vector2(-14, 12)])
-	hull.color = Cosmetics.hull_color(profile)
+	var hull := PixelArt.sprite("ship", {"h": Cosmetics.hull_color(profile), "H": Cosmetics.hull_color(profile).darkened(0.3)}, SCALE)
 	parent.add_child(hull)
 	var sticker := Cosmetics.sticker(profile)
 	if sticker != "":
