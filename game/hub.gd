@@ -112,12 +112,15 @@ func _build_options() -> void:
 ## Boss par table (7).
 static func boss_name_of(table: int) -> String:
 	match table:
+		1: return "La Sentinelle : ×1, le nombre ne change pas."
+		10: return "Le Phare : ×10, on ajoute un zéro."
 		2: return "Les Jumeaux : ×2, c'est doubler."
+		3: return "Le Trèfle : ×3, c'est le double plus une fois le nombre."
 		4: return "Le Double-Jumeau : ×4, c'est doubler deux fois."
 		5: return "L'Étoile à cinq branches : les résultats finissent par 0 ou 5."
+		6: return "La Ruche : ×6, c'est le double de ×3."
 		9: return "Le Miroir : les chiffres du résultat font 9."
 		7, 8: return "Les Généraux : les tables les plus dures."
-		1, 10: return "Le Gardien du système d'origine."
 	return "Gardien du système ×%d." % table
 
 

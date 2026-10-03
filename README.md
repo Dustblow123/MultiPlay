@@ -109,6 +109,7 @@ et l'état complet peut être recalculé depuis ce journal
 ## Tests
 
 ```sh
+sh tests/lint.sh                                         # garde-fou GDScript (voir ci-dessous)
 godot --headless --path . --import                       # une fois, après un clone
 godot --headless --path . -s tests/run_tests.gd          # unitaires + simulation (≈ 5 s)
 godot --headless --path . -s tests/run_tests.gd -- --quick
@@ -131,14 +132,18 @@ le renvoie en boîte 1 (règle du document), d'où un régime stable à 90–95 
 planètes colonisées plutôt que 100 % en permanence. Une absence de deux
 semaines ne provoque pas d'avalanche (10 révisions au plus par session).
 
-L'intégration continue (`.github/workflows/tests.yml`) exécute les trois
-commandes ci-dessus.
+L'intégration continue (`.github/workflows/tests.yml`) exécute ces commandes.
+
+Piège connu de Godot 4.5 : `var x := conteneur[clé]` sur un conteneur non typé
+bloque le chargement du script sans message. `tests/lint.sh` refuse ce motif ;
+il suffit d'écrire le type (`var x: String = ...`).
 
 ## Questions ouvertes (§10.3)
 
 - Les ×0 font-ils partie du jeu ? Réglable : `EngineConfig.include_zero`.
 - Tables au-delà de 10 ? Réglable : `EngineConfig.table_max`.
-- Boss des tables de 3 et 6 : concept à définir.
+- Boss des tables de 3 et 6 : proposés en version brute, « Le Trèfle » (×3,
+  le double plus une fois le nombre) et « La Ruche » (×6, le double de ×3).
 - Mode tower defense calme : l'indice `mode_hint = "qcm"` du contexte permet
   déjà de forcer le QCM sur les faits en consolidation.
 - Seuils chiffrés (2 s de marge, 400 ms anti-hasard, 20 % d'erreurs) : dans

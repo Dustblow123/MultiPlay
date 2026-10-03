@@ -74,6 +74,12 @@ var is_arena: bool = false
 var is_boss: bool = false
 var _boss_bar: ColorRect
 var _boss_label: Label
+var is_defense: bool = false
+var is_duel: bool = false
+var _planet_label: Label
+var _planet_shield: Array = []
+var _last_outcome: Dictionary = {}
+var _intro_shown: bool = false
 
 
 func _ready() -> void:
@@ -85,6 +91,10 @@ func _ready() -> void:
 	_build_scene()
 	is_arena = context.get("type", "") == LearningEngine.MISSION_ARENA
 	is_boss = context.get("boss", false)
+	is_defense = context.get("type", "") == LearningEngine.MISSION_DEFENSE
+	is_duel = context.get("type", "") == LearningEngine.MISSION_DUEL
+	if is_defense:
+		_build_planet_panel()
 	if is_boss:
 		items_total = 15
 		_build_boss_bar()
@@ -239,6 +249,17 @@ func _next_item() -> void:
 	_enemy_body.color = UI.DARK_GREY
 	_enemy.visible = true
 	_enemy_label.text = item["question"]
+	_last_outcome = {}
+	if is_defense:
+		_update_planet_panel()
+	if is_duel:
+		# Le Confondeur (6) : ennemi spécial, violet, qui alterne les deux calculs confondus.
+		_enemy_body.color = Color(0.45, 0.25, 0.6)
+		if not _intro_shown and context.has("pair"):
+			_intro_shown = true
+			_message.text = "LE CONFONDEUR"
+			_subtitle.text = "Il mélange %s et %s : ne te laisse pas avoir !" % [UI.fact_text(context["pair"][0]), UI.fact_text(context["pair"][1])]
+			Sfx.play("boss", 1.5)
 	for c in _cannons:
 		c.visible = false
 	_wheel.visible = false
@@ -324,6 +345,35 @@ func _emit_trail(delta: float) -> void:
 	r.position = _ship.position + Vector2(_rng.randf_range(-5, 5), 12)
 	add_child(r)
 	_particles.append({"node": r, "vel": Vector2(_rng.randf_range(-15, 15), 60), "life": 0.4})
+
+
+## Défense (5.4, 6) : la planète attaquée est visible en bas, avec son bouclier.
+func _build_planet_panel() -> void:
+	var panel := UI.rect(Color(0.12, 0.14, 0.22), Vector2(200, 34))
+	panel.position = Vector2(8, 40)
+	add_child(panel)
+	_planet_label = UI.label("", 11, UI.TEXT)
+	_planet_label.position = Vector2(14, 42)
+	add_child(_planet_label)
+	for i in range(Game.SHIELD_MAX):
+		var r := UI.rect(Color("60a5fa"), Vector2(40, 5))
+		r.position = Vector2(14 + i * 44, 64)
+		add_child(r)
+		_planet_shield.append(r)
+
+
+func _update_planet_panel() -> void:
+	if _planet_label == null:
+		return
+	var fs: FactState = Game.engine.fact_state(item["fact"])
+	var status: String = {"dark": "inconnue", "orbit": "en orbite", "colonized": "colonisée", "besieged": "assiégée"}[Game.engine.planet_status(fs)]
+	if item.get("is_due", false):
+		_planet_label.text = "Pirates sur la planète %s (%s) !" % [UI.fact_text(item["fact"]), status]
+		_enemy_body.color = Color(0.5, 0.2, 0.2)
+	else:
+		_planet_label.text = "Patrouille : planète %s (%s)" % [UI.fact_text(item["fact"]), status]
+	for i in range(_planet_shield.size()):
+		_planet_shield[i].color = Color("60a5fa") if i < shield else Color(0.25, 0.25, 0.3)
 
 
 func outcome_fast_hint(text: String) -> bool:
@@ -503,6 +553,7 @@ func _submit(answer: int, flags: Dictionary) -> void:
 func _report(answer: int, flags: Dictionary) -> Dictionary:
 	_reported = true
 	var outcome := Game.engine.report_result(item, answer, _elapsed_ms(), flags)
+	_last_outcome = outcome
 	if outcome["mastered_now"]:
 		mastered_keys.append(item["fact"])
 	if item["mode"] == LearningEngine.MODE_PRESENTATION:
@@ -585,6 +636,10 @@ func _resolve(success: bool, text: String, reward: bool) -> void:
 				Sfx.play("fast" if _reported and fast_count > 0 and text == "Rapide !" else "good", 1.0 + 0.03 * minf(combo, 10))
 			if combo >= 3:
 				_subtitle.text = "Combo ×%d" % combo
+			if is_defense and item.get("is_due", false):
+				# Planète sauvée, intervalle allongé (6) quand la boîte a monté.
+				var advanced: bool = int(_last_outcome.get("box", 0)) > int(item.get("box", 0))
+				_subtitle.text = "Planète %s sauvée%s" % [UI.fact_text(item["fact"]), " : intervalle allongé !" if advanced else ""]
 	_enemy.visible = false
 	for c in _cannons:
 		c.visible = false
@@ -640,6 +695,8 @@ func _update_hud() -> void:
 		_hud.text = "%s   %d/%d   Combo ×%d   ✦ %d" % [UI.mission_name(context.get("type", "")), item_index, items_total, combo, stardust]
 	for i in range(_shield_rect.size()):
 		_shield_rect[i].color = UI.OK if i < shield else Color(0.25, 0.25, 0.3)
+	for i in range(_planet_shield.size()):
+		_planet_shield[i].color = Color("60a5fa") if i < shield else Color(0.25, 0.25, 0.3)
 
 
 func _update_composed() -> void:

@@ -20,6 +20,9 @@ jobs:
           chmod +x godot
           ./godot --version
 
+      - name: Garde-fou GDScript
+        run: sh tests/lint.sh
+
       - name: Importer le projet
         run: ./godot --headless --path . --import
 

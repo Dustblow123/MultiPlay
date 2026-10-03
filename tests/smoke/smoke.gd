@@ -166,6 +166,22 @@ func _run() -> void:
 		m.queue_free()
 		await get_tree().process_frame
 
+	# Défense : des planètes attaquées (révisions dues) et le panneau de planète.
+	for key in ["3x4", "3x5", "4x5"]:
+		var fs2: FactState = Game.engine.states[key]
+		fs2.state = FactState.State.CONSOLIDATION
+		fs2.box = 2
+		fs2.due_session = 0
+		fs2.due_day = 0
+	Game.mission_context = {"type": LearningEngine.MISSION_DEFENSE}
+	var defense: Node = load("res://game/mission/mission.tscn").instantiate()
+	add_child(defense)
+	await get_tree().process_frame
+	_check(defense.item.get("is_due", false), "la défense sert d'abord une planète attaquée")
+	_check(defense._planet_label.text.begins_with("Pirates"), "le panneau annonce les pirates")
+	defense.queue_free()
+	await get_tree().process_frame
+
 	# Sauvegarde puis rechargement du profil.
 	Game.save()
 	var loaded := ProfileStore.load_profile("smoke_test_profile")
