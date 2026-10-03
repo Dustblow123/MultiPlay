@@ -82,7 +82,31 @@ func _run() -> void:
 	add_child(parent_screen)
 	await get_tree().process_frame
 	parent_screen.queue_free()
+	var options: Node = load("res://game/ui/options.tscn").instantiate()
+	add_child(options)
 	await get_tree().process_frame
+	options._adjust(1)
+	_check(is_equal_approx(float(Game.profile.settings["deadzone"]), 0.4), "la zone morte se règle par pas de 0,05")
+	options.queue_free()
+	await get_tree().process_frame
+
+	# Navigation de menu : détection de front, pas de rafale, neutre obligatoire.
+	var nav := MenuNav.new()
+	Input.action_press("menu_bas", 1.0)
+	_check(nav.poll_vertical(0.016) == 0, "stick déjà incliné à l'ouverture : ignoré tant qu'il n'est pas revenu au neutre")
+	Input.action_release("menu_bas")
+	nav.poll_vertical(0.016)
+	Input.action_press("menu_bas", 1.0)
+	_check(nav.poll_vertical(0.016) == 1, "premier front : un déplacement")
+	var moves := 0
+	for _i in range(20):
+		moves += absi(nav.poll_vertical(0.016))
+	_check(moves == 0, "maintenir 0,3 s ne répète pas encore, obtenu %d" % moves)
+	for _i in range(60):
+		moves += absi(nav.poll_vertical(0.016))
+	_check(moves >= 3 and moves <= 5, "maintenir ~1 s répète à cadence lente, obtenu %d" % moves)
+	Input.action_release("menu_bas")
+	_check(Sfx._streams.size() >= 8, "les effets sonores sont générés")
 
 	# Sauvegarde puis rechargement du profil.
 	Game.save()

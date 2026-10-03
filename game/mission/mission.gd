@@ -63,6 +63,9 @@ var _shield_rect: Array = []
 var _tip_label: Label
 var _rng := RandomNumberGenerator.new()
 var _stars: Array = []
+var _particles: Array = []
+var _shield_blink_left: float = 0.0
+var _hull: Polygon2D
 
 
 func _ready() -> void:
@@ -87,10 +90,10 @@ func _build_scene() -> void:
 
 	_ship = Node2D.new()
 	_ship.position = Vector2(W / 2.0, SHIP_Y)
-	var hull := Polygon2D.new()
-	hull.polygon = PackedVector2Array([Vector2(0, -16), Vector2(14, 12), Vector2(0, 6), Vector2(-14, 12)])
-	hull.color = UI.GREY
-	_ship.add_child(hull)
+	_hull = Polygon2D.new()
+	_hull.polygon = PackedVector2Array([Vector2(0, -16), Vector2(14, 12), Vector2(0, 6), Vector2(-14, 12)])
+	_hull.color = UI.GREY
+	_ship.add_child(_hull)
 	add_child(_ship)
 
 	_enemy = Node2D.new()
@@ -232,6 +235,7 @@ func _next_item() -> void:
 	match item["mode"]:
 		LearningEngine.MODE_PRESENTATION:
 			# Première rencontre en « scan » : calcul + réponse affichés (6).
+			Sfx.play("scan")
 			_enemy_label.text = "%s = %d" % [item["question"], item["answer"]]
 			_enemy_body.color = Color(0.2, 0.3, 0.45)
 			_message.text = "SCAN : nouvelle planète"
@@ -251,6 +255,8 @@ func _next_item() -> void:
 			_enemy_speed = _speed_for(item, 3.0)
 	if context.get("boss", false) and _boss_phase == 2:
 		_enemy_speed *= 1.6
+	if context.get("boss", false) and item_index == 1:
+		Sfx.play("boss")
 	_update_composed()
 	_item_start_ms = Time.get_ticks_msec()
 	phase = Phase.ACTIVE
@@ -265,6 +271,9 @@ func _speed_for(it: Dictionary, factor: float) -> float:
 
 
 func _process(delta: float) -> void:
+	_poll_input()
+	_update_particles(delta)
+	_update_shield_blink(delta)
 	if phase == Phase.ACTIVE:
 		_move_ship(delta)
 		_enemy.position.y += _enemy_speed * delta
@@ -286,7 +295,21 @@ func _move_ship(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("pause"):
+	# Seules les touches chiffrées du clavier passent par les événements ; le
+	# reste est sondé dans _poll_input (les gâchettes sont des axes, qui
+	# génèrent plusieurs événements par appui).
+	if phase != Phase.ACTIVE or get_tree().paused or not _wheel.visible:
+		return
+	if event is InputEventKey and event.pressed and not event.echo:
+		var k: InputEventKey = event
+		if k.keycode >= KEY_0 and k.keycode <= KEY_9:
+			wheel_add_digit(k.keycode - KEY_0)
+		elif k.keycode >= KEY_KP_0 and k.keycode <= KEY_KP_9:
+			wheel_add_digit(k.keycode - KEY_KP_0)
+
+
+func _poll_input() -> void:
+	if Input.is_action_just_pressed("pause"):
 		_toggle_pause()
 		return
 	if phase != Phase.ACTIVE or get_tree().paused:
@@ -294,27 +317,23 @@ func _unhandled_input(event: InputEvent) -> void:
 	match item["mode"]:
 		LearningEngine.MODE_PRESENTATION:
 			for letter in UI.BUTTON_ORDER:
-				if event.is_action_pressed(UI.BUTTON_ACTIONS[letter]):
+				if Input.is_action_just_pressed(UI.BUTTON_ACTIONS[letter]):
 					_acknowledge_presentation()
-			if event.is_action_pressed("tir"):
+					return
+			if Input.is_action_just_pressed("tir"):
 				_acknowledge_presentation()
 		LearningEngine.MODE_QCM:
 			for i in range(4):
-				if event.is_action_pressed(UI.BUTTON_ACTIONS[UI.BUTTON_ORDER[i]]):
+				if Input.is_action_just_pressed(UI.BUTTON_ACTIONS[UI.BUTTON_ORDER[i]]):
 					press_cannon(i)
+					return
 		_:
-			if event.is_action_pressed("tir"):
+			if Input.is_action_just_pressed("tir"):
 				wheel_add_selected_digit()
-			elif event.is_action_pressed("canon_A"):
+			elif Input.is_action_just_pressed("canon_A"):
 				wheel_fire()
-			elif event.is_action_pressed("roue_effacer"):
+			elif Input.is_action_just_pressed("roue_effacer"):
 				wheel_clear()
-			elif event is InputEventKey and event.pressed and not event.echo:
-				var k: InputEventKey = event
-				if k.keycode >= KEY_0 and k.keycode <= KEY_9:
-					wheel_add_digit(k.keycode - KEY_0)
-				elif k.keycode >= KEY_KP_0 and k.keycode <= KEY_KP_9:
-					wheel_add_digit(k.keycode - KEY_KP_0)
 
 
 func _toggle_pause() -> void:
@@ -361,6 +380,7 @@ func press_cannon(index: int) -> void:
 		if now - t <= 1000:
 			recent += 1
 	var answer: int = item["options"][index]
+	Sfx.play("shoot")
 	_submit(answer, {"mashing": recent >= 3})
 
 
@@ -388,6 +408,7 @@ func wheel_fire() -> void:
 	var value := int(_composed)
 	_composed = ""
 	_update_composed()
+	Sfx.play("shoot")
 	_submit(value, {})
 
 
@@ -449,6 +470,9 @@ func _wrong_hit(_answer: int, first: bool) -> void:
 	combo = 0
 	shield -= 1
 	_wrong_this_item = true
+	_shield_blink_left = 0.6
+	_hull.color = UI.GREY
+	Sfx.play("error")
 	_enemy.scale = _enemy.scale * 1.15
 	_enemy_body.color = Color(0.5, 0.3, 0.3)
 	_message.text = "Ennemi renforcé"
@@ -466,6 +490,9 @@ func _enemy_reached_ship() -> void:
 	# Un même ennemi ne coûte qu'un point de bouclier, même s'il a déjà été manqué.
 	if not _wrong_this_item:
 		shield -= 1
+		_shield_blink_left = 0.6
+	_hull.color = UI.GREY
+	Sfx.play("hit")
 	_update_hud()
 	_resolve(false, "La planète est assiégée (réponse : %d)" % item["answer"], false)
 
@@ -476,19 +503,25 @@ func _resolve(success: bool, text: String, reward: bool) -> void:
 	Engine.time_scale = 1.0
 	_message.text = text
 	if success and item["mode"] != LearningEngine.MODE_PRESENTATION:
+		# Explosion satisfaisante, son net et positif, courte vibration (8).
+		_spawn_explosion(_enemy.position, UI.ACCENT if reward else UI.GREY)
 		if reward:
 			combo += 1
 			best_combo = maxi(best_combo, combo)
 			stardust += 1
 			Game.profile.stardust += 1
 			Game.vibrate()
+			# Série de réussites : le vaisseau s'illumine, la musique s'intensifie.
+			_hull.color = UI.GREY.lerp(UI.ACCENT, minf(combo, 6) / 6.0)
+			if text == "PLANÈTE COLONISÉE !":
+				Sfx.play("colonize")
+			elif combo > 0 and combo % 5 == 0:
+				Sfx.play("combo", 1.0 + 0.05 * (combo / 5))
+			else:
+				Sfx.play("fast" if _reported and fast_count > 0 and text == "Rapide !" else "good", 1.0 + 0.03 * minf(combo, 10))
 			if combo >= 3:
 				_subtitle.text = "Combo ×%d" % combo
-		_enemy.visible = false
-	elif success:
-		_enemy.visible = false
-	else:
-		_enemy.visible = false
+	_enemy.visible = false
 	for c in _cannons:
 		c.visible = false
 	_wheel.visible = false
@@ -558,6 +591,47 @@ func _update_wheel_selection() -> void:
 	for d in range(10):
 		_wheel_digits[d].add_theme_color_override("font_color", UI.ACCENT if d == _wheel_digit else UI.MUTED)
 	Engine.time_scale = BULLET_TIME_SCALE if composing else 1.0
+
+
+## Explosion en formes grises : des éclats qui s'écartent puis s'éteignent.
+## Aucun effet ne masque le calcul suivant : les éclats vivent 0,4 s.
+func _spawn_explosion(pos: Vector2, color: Color) -> void:
+	for _i in range(14):
+		var r := UI.rect(color, Vector2(4, 4))
+		r.position = pos
+		add_child(r)
+		var angle := _rng.randf() * TAU
+		var speed := _rng.randf_range(80, 220)
+		_particles.append({"node": r, "vel": Vector2(cos(angle), sin(angle)) * speed, "life": 0.4})
+
+
+func _update_particles(delta: float) -> void:
+	var alive: Array = []
+	for p in _particles:
+		p["life"] -= delta
+		var node: ColorRect = p["node"]
+		if p["life"] <= 0.0:
+			node.queue_free()
+			continue
+		node.position += p["vel"] * delta
+		node.modulate.a = p["life"] / 0.4
+		alive.append(p)
+	_particles = alive
+
+
+## Erreur : le bouclier clignote (8), sans vibration ni son punitif.
+func _update_shield_blink(delta: float) -> void:
+	if _shield_blink_left <= 0.0:
+		return
+	_shield_blink_left -= delta
+	var on := int(_shield_blink_left * 10) % 2 == 0
+	for i in range(_shield_rect.size()):
+		if i < shield:
+			_shield_rect[i].color = UI.OK
+		else:
+			_shield_rect[i].color = UI.BAD if on else Color(0.25, 0.25, 0.3)
+	if _shield_blink_left <= 0.0:
+		_update_hud()
 
 
 func _exit_tree() -> void:

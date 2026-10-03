@@ -6,6 +6,7 @@ var _options: Array = []
 var _index: int = 0
 var _menu: VBoxContainer
 var _engine: LearningEngine
+var _nav := MenuNav.new()
 
 
 func _ready() -> void:
@@ -99,6 +100,7 @@ func _build_options() -> void:
 			_options.append({"label": "Boss du système ×%d" % table, "hint": _boss_name(table),
 				"context": {"type": LearningEngine.MISSION_BOSS, "tables": [table], "boss": true}})
 	_options.append({"label": "Écran parent", "hint": "Grille des faits, confusions, temps de jeu.", "scene": "res://game/ui/parent_screen.tscn"})
+	_options.append({"label": "Options", "hint": "Zone morte du stick, vibrations, sons.", "scene": "res://game/ui/options.tscn"})
 	_options.append({"label": "Changer de profil", "hint": "", "scene": "res://game/main.tscn"})
 
 
@@ -129,16 +131,15 @@ func _refresh_menu() -> void:
 	_menu.add_child(l)
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("menu_bas"):
-		_index = (_index + 1) % _options.size()
+func _process(delta: float) -> void:
+	var dir := _nav.poll_vertical(delta)
+	if dir != 0:
+		_index = (_index + dir + _options.size()) % _options.size()
+		Sfx.play("select")
 		_refresh_menu()
-	elif event.is_action_pressed("menu_haut"):
-		_index = (_index - 1 + _options.size()) % _options.size()
-		_refresh_menu()
-	elif event.is_action_pressed("canon_A") or event.is_action_pressed("tir"):
+	elif _nav.confirm():
 		_launch(_options[_index])
-	elif event.is_action_pressed("ecran_parent"):
+	elif _nav.pressed("ecran_parent"):
 		get_tree().change_scene_to_file("res://game/ui/parent_screen.tscn")
 
 

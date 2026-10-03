@@ -49,13 +49,24 @@ clavier reste disponible en secours.
 | Tirer le nombre composé (roue) | A | A |
 | Effacer le nombre composé | LT (ou LB) | Retour arrière |
 | Déplacer le vaisseau | Stick gauche / croix | Flèches gauche et droite |
-| Menus | Croix haut/bas, A | Flèches haut/bas, A |
+| Menus : choisir | Croix ou stick gauche haut/bas | Flèches haut/bas |
+| Menus : valider / retour | A / B | Entrée ou Espace / Échap |
+| Options : régler une valeur | Croix ou stick gauche gauche/droite | Flèches gauche/droite |
 | Pause | Start | Échap |
 | Écran parent (depuis le hub) | Back | P |
 
+Les menus sont sondés avec détection de front et répétition temporisée
+(`game/ui/menu_nav.gd`) : un stick incliné ne fait qu'un pas, puis répète
+lentement si on le maintient, et doit revenir au neutre à l'ouverture d'un
+écran. Les gâchettes (RT, LT) sont des axes et sont traitées de la même façon
+dans les missions.
+
 La manette débranchée met le jeu en pause ; il reprend au rebranchement. La
-zone morte du stick et les vibrations sont des réglages du profil
-(`settings.deadzone`, `settings.vibration`).
+zone morte du stick (avec une roue de test), les vibrations et les sons se
+règlent dans l'écran Options du hub et sont enregistrés dans le profil.
+
+Les effets sonores sont des ondes carrées et triangulaires générées en code au
+démarrage (`game/autoload/sfx.gd`) : aucun asset audio pour l'instant.
 
 ## Architecture en trois couches
 
@@ -71,7 +82,8 @@ game/          Jeu : demande le prochain calcul, renvoie le résultat
   autoload/game.gd     profil courant, session, manette, sauvegarde
   main.gd / hub.gd     choix du profil, vaisseau-mère et carte galactique
   mission/mission.gd   vaisseau, ennemis, canons, roue, décomposition, boss
-  ui/                  écran de résultats, écran parent, helpers d'interface
+  ui/                  résultats, écran parent, options, navigation de menu, helpers
+  autoload/sfx.gd      effets rétro générés en code
 tests/         Tests unitaires, simulation d'élèves fictifs, test de fumée
 ```
 

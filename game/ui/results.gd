@@ -1,6 +1,8 @@
 extends Control
 ## Retour au hub (2) : récompenses de fin de mission, carte mise à jour ensuite.
 
+var _nav := MenuNav.new()
+
 
 func _ready() -> void:
 	UI.fill_background(self)
@@ -36,6 +38,7 @@ func _ready() -> void:
 	add_child(help)
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("canon_A") or event.is_action_pressed("tir") or event.is_action_pressed("canon_B"):
+func _process(delta: float) -> void:
+	_nav.poll_vertical(delta)
+	if _nav.confirm() or _nav.back():
 		get_tree().change_scene_to_file("res://game/hub.tscn")

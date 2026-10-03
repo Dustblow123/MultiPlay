@@ -2,6 +2,8 @@ extends Control
 ## Écran parent (10.1) : grille 10×10 des faits, faits à problème, temps de jeu,
 ## temps de réponse. Sert aussi d'outil de vérification de l'algorithme.
 
+var _nav := MenuNav.new()
+
 
 func _ready() -> void:
 	UI.fill_background(self)
@@ -105,6 +107,7 @@ func _response_time_trend(engine: LearningEngine) -> String:
 	return "  ·  ".join(parts) if not parts.is_empty() else "Pas encore de données."
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("canon_B") or event.is_action_pressed("pause") or event.is_action_pressed("ecran_parent"):
+func _process(delta: float) -> void:
+	_nav.poll_vertical(delta)
+	if _nav.back() or _nav.pressed("pause") or _nav.pressed("ecran_parent"):
 		get_tree().change_scene_to_file("res://game/hub.tscn")

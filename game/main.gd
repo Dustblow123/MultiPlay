@@ -4,6 +4,7 @@ extends Control
 var _profiles: Array = []
 var _index: int = 0
 var _list: VBoxContainer
+var _nav := MenuNav.new()
 
 
 func _ready() -> void:
@@ -14,7 +15,7 @@ func _ready() -> void:
 	v.add_child(UI.label(" ", 8))
 	v.add_child(UI.label("Qui joue ?", 18))
 	_list = UI.vbox(self, Vector2(40, 120), 2)
-	var help := UI.label("Haut/Bas : choisir    A : jouer    Clavier : flèches, lettres A B X Y, Espace, Entrée", 11, UI.MUTED)
+	var help := UI.label("Haut/Bas : choisir    A : jouer    Clavier : flèches, Entrée, lettres A B X Y", 11, UI.MUTED)
 	help.position = Vector2(40, 330)
 	add_child(help)
 	_refresh()
@@ -37,15 +38,14 @@ func _entry(text: String, i: int) -> Label:
 	return l
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _process(delta: float) -> void:
 	var count := _profiles.size() + 1
-	if event.is_action_pressed("menu_bas"):
-		_index = (_index + 1) % count
+	var dir := _nav.poll_vertical(delta)
+	if dir != 0:
+		_index = (_index + dir + count) % count
+		Sfx.play("select")
 		_refresh()
-	elif event.is_action_pressed("menu_haut"):
-		_index = (_index - 1 + count) % count
-		_refresh()
-	elif event.is_action_pressed("canon_A") or event.is_action_pressed("tir"):
+	elif _nav.confirm():
 		_confirm()
 
 

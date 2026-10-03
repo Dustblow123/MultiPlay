@@ -44,6 +44,7 @@ func set_profile(p: Profile) -> void:
 	profile = p
 	_play_start_unix = int(Time.get_unix_time_from_system())
 	last_activity_unix = _play_start_unix
+	Sfx.enabled = bool(p.settings.get("sound", true))
 
 
 func create_profile(name: String) -> Profile:
