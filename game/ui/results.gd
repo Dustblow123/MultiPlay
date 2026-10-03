@@ -31,8 +31,13 @@ func _ready() -> void:
 		for key in new_facts:
 			names2.append(UI.fact_text(key))
 		v.add_child(UI.label("Planètes découvertes : " + ", ".join(names2), 14, UI.TEXT))
+	if r.has("score"):
+		v.add_child(UI.label("Score : %d" % r["score"], 18, UI.ACCENT))
+		if r.get("new_record", false):
+			v.add_child(UI.label("NOUVEAU RECORD !", 18, UI.OK))
 	if r.get("boss_beaten", false):
-		v.add_child(UI.label("Système ×%d libéré ! Nouvelle pièce de vaisseau et nouveau membre d'équipage." % r.get("boss_table", 0), 14, UI.ACCENT))
+		v.add_child(UI.label("Système ×%d libéré ! Une aile de plus sur le vaisseau." % r.get("boss_table", 0), 14, UI.ACCENT))
+		v.add_child(UI.label("%s rejoint l'équipage." % r.get("crew_name", ""), 14, UI.ACCENT))
 	var help := UI.label("A : retour au vaisseau-mère", 12, UI.MUTED)
 	help.position = Vector2(40, 330)
 	add_child(help)

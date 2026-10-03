@@ -17,8 +17,10 @@ Feuille de route (§10.2 du document) :
 1. **Moteur d'apprentissage seul, validé par simulation** — fait.
 2. **Prototype jouable minimal** (vaisseau, ennemis porteurs d'un calcul,
    4 canons, formes grises) — fait, avec en plus la roue de chargement, la
-   décomposition, le hub, la carte galactique, les boss et l'écran parent en
-   version brute.
+   décomposition, le hub, la carte galactique, les boss (barre de vie, trois
+   phases), l'arène (score, records), les déblocages (ailes-trophées,
+   équipage, cosmétiques en poussière d'étoile) et l'écran parent, en version
+   brute.
 3. Test avec un enfant — à faire.
 4. à 8. Roue et défense, carte et déblocages, graphismes et sons, systèmes
    suivants, finitions — partiellement couverts en version brute, à reprendre
@@ -81,8 +83,10 @@ persistence/   Profils : un fichier JSON par enfant dans user://profiles
 game/          Jeu : demande le prochain calcul, renvoie le résultat
   autoload/game.gd     profil courant, session, manette, sauvegarde
   main.gd / hub.gd     choix du profil, vaisseau-mère et carte galactique
-  mission/mission.gd   vaisseau, ennemis, canons, roue, décomposition, boss
-  ui/                  résultats, écran parent, options, navigation de menu, helpers
+  mission/mission.gd   vaisseau, ennemis, canons, roue, décomposition, boss, arène
+  mission/crew.gd      équipage recruté sur les boss, astuces en mission
+  mission/ship_view.gd dessin du vaisseau : coque, ailes-trophées, autocollant
+  ui/                  résultats, écran parent, options, vaisseau et cosmétiques, navigation
   autoload/sfx.gd      effets rétro générés en code
 tests/         Tests unitaires, simulation d'élèves fictifs, test de fumée
 ```

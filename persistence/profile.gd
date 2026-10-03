@@ -14,6 +14,8 @@ var play_time_sec: int = 0
 var stardust: int = 0
 var settings: Dictionary = {"deadzone": 0.35, "vibration": true}
 var unlocks: Dictionary = {"weapons": ["cannons"], "ship_parts": [], "crew": [], "cosmetics": []}
+## Records personnels (arène) : "arena_score" -> int.
+var records: Dictionary = {}
 var engine: LearningEngine
 
 
@@ -37,6 +39,7 @@ func to_dict() -> Dictionary:
 		"stardust": stardust,
 		"settings": settings.duplicate(true),
 		"unlocks": unlocks.duplicate(true),
+		"records": records.duplicate(true),
 		"engine": engine.to_dict(),
 	}
 
@@ -57,6 +60,9 @@ static func from_dict(d: Dictionary, cfg: EngineConfig = null) -> Profile:
 	for k in ["weapons", "ship_parts", "crew", "cosmetics"]:
 		if not p.unlocks.has(k):
 			p.unlocks[k] = []
+	var rec: Dictionary = d.get("records", {})
+	for k in rec:
+		p.records[str(k)] = int(rec[k])
 	p.engine = LearningEngine.from_dict(d.get("engine", {}), cfg)
 	return p
 

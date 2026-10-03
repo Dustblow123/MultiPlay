@@ -108,6 +108,64 @@ func _run() -> void:
 	Input.action_release("menu_bas")
 	_check(Sfx._streams.size() >= 8, "les effets sonores sont générés")
 
+	# Boutique du vaisseau : achat en poussière d'étoile, refus si elle manque.
+	Game.profile.stardust = 25
+	_check(Cosmetics.buy_or_equip(Game.profile, "color", "blue"), "achat possible avec assez de poussière")
+	_check(Game.profile.stardust == 5, "le prix est débité")
+	_check(not Cosmetics.buy_or_equip(Game.profile, "color", "gold"), "achat refusé sans poussière")
+	_check(Cosmetics.buy_or_equip(Game.profile, "color", "blue"), "ré-équiper un cosmétique acquis est gratuit")
+	var ship_screen: Node = load("res://game/ui/ship_screen.tscn").instantiate()
+	add_child(ship_screen)
+	await get_tree().process_frame
+	ship_screen.queue_free()
+	await get_tree().process_frame
+
+	# Arène puis boss : faits de la table de 2 maîtrisés.
+	for key in Game.engine.states:
+		var fs: FactState = Game.engine.states[key]
+		if fs.fact.belongs_to(2):
+			fs.state = FactState.State.MASTERED
+			fs.box = 5
+	_check(Game.engine.boss_ready(2), "boss de la table de 2 prêt")
+	for ctx in [{"type": LearningEngine.MISSION_ARENA}, {"type": LearningEngine.MISSION_BOSS, "tables": [2], "boss": true}]:
+		Game.mission_context = ctx
+		var m: Node = load("res://game/mission/mission.tscn").instantiate()
+		add_child(m)
+		await get_tree().process_frame
+		var g := 0
+		while m.phase != m.Phase.DONE and g < 300:
+			g += 1
+			if m.phase == m.Phase.ACTIVE:
+				var it: Dictionary = m.item
+				_check(it["state"] == "mastered", "%s : faits maîtrisés seulement" % ctx["type"])
+				match it["mode"]:
+					LearningEngine.MODE_QCM:
+						m.press_cannon(it["options"].find(it["answer"]))
+					LearningEngine.MODE_DECOMPOSITION:
+						for ch in str(it["accepted"][0]):
+							m.wheel_add_digit(int(ch))
+						m.wheel_fire()
+						_check(m.phase == m.Phase.ACTIVE, "après un facteur, il reste l'autre à achever")
+						for ch in str(m._decomp_remaining):
+							m.wheel_add_digit(int(ch))
+						m.wheel_fire()
+					_:
+						for ch in str(it["answer"]):
+							m.wheel_add_digit(int(ch))
+						m.wheel_fire()
+			for _i in range(3):
+				m._process(0.3)
+				await get_tree().process_frame
+		var r := Game.last_mission_result
+		if ctx["type"] == LearningEngine.MISSION_ARENA:
+			_check(r.get("score", 0) > 0 and r.get("new_record", false), "l'arène donne un score et un record")
+			_check(Game.profile.records.get("arena_score", 0) == r["score"], "record enregistré dans le profil")
+		else:
+			_check(r.get("boss_beaten", false) and Game.profile.unlocks["crew"].has("crew_2"), "boss vaincu : équipage recruté")
+			_check(Game.profile.unlocks["ship_parts"].has("boss_2"), "boss vaincu : pièce de vaisseau")
+		m.queue_free()
+		await get_tree().process_frame
+
 	# Sauvegarde puis rechargement du profil.
 	Game.save()
 	var loaded := ProfileStore.load_profile("smoke_test_profile")

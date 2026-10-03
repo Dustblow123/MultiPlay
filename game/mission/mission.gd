@@ -66,6 +66,14 @@ var _stars: Array = []
 var _particles: Array = []
 var _shield_blink_left: float = 0.0
 var _hull: Polygon2D
+var _hull_color: Color = UI.GREY
+var _trail_left: float = 0.0
+## Arène (6) : score, combos, records personnels.
+var score: int = 0
+var is_arena: bool = false
+var is_boss: bool = false
+var _boss_bar: ColorRect
+var _boss_label: Label
 
 
 func _ready() -> void:
@@ -75,8 +83,13 @@ func _ready() -> void:
 	for _i in range(90):
 		_stars.append(Vector3(_rng.randf() * W, _rng.randf() * H, _rng.randf_range(0.3, 1.0)))
 	_build_scene()
-	if context.get("boss", false):
+	is_arena = context.get("type", "") == LearningEngine.MISSION_ARENA
+	is_boss = context.get("boss", false)
+	if is_boss:
 		items_total = 15
+		_build_boss_bar()
+	if is_arena:
+		items_total = 25
 	Game.controller_disconnected.connect(_on_controller_disconnected)
 	Game.controller_reconnected.connect(_on_controller_reconnected)
 	_next_item()
@@ -90,10 +103,8 @@ func _build_scene() -> void:
 
 	_ship = Node2D.new()
 	_ship.position = Vector2(W / 2.0, SHIP_Y)
-	_hull = Polygon2D.new()
-	_hull.polygon = PackedVector2Array([Vector2(0, -16), Vector2(14, 12), Vector2(0, 6), Vector2(-14, 12)])
-	_hull.color = UI.GREY
-	_ship.add_child(_hull)
+	_hull = ShipView.build(_ship, Game.profile)
+	_hull_color = _hull.color
 	add_child(_ship)
 
 	_enemy = Node2D.new()
@@ -222,7 +233,7 @@ func _next_item() -> void:
 	_decomp_remaining = -1
 	_message.text = ""
 	_subtitle.text = ""
-	_tip_label.text = Tips.for_item(item)
+	_tip_label.text = Crew.tip_for_item(item, Game.profile.unlocks["crew"])
 	_enemy.position = Vector2(_rng.randf_range(120, W - 120), ENEMY_START_Y)
 	_enemy.scale = Vector2.ONE
 	_enemy_body.color = UI.DARK_GREY
@@ -249,14 +260,18 @@ func _next_item() -> void:
 		LearningEngine.MODE_WHEEL:
 			_wheel.visible = true
 			_enemy_speed = _speed_for(item, 2.2 if item["state"] == "mastered" else 3.0)
+			if is_arena:
+				_enemy_speed *= 1.3
 		LearningEngine.MODE_DECOMPOSITION:
 			_wheel.visible = true
 			_subtitle.text = "Décompose : tire un facteur"
 			_enemy_speed = _speed_for(item, 3.0)
 	if context.get("boss", false) and _boss_phase == 2:
 		_enemy_speed *= 1.6
-	if context.get("boss", false) and item_index == 1:
+	if is_boss and item_index == 1:
 		Sfx.play("boss")
+	if is_boss:
+		_update_boss_bar()
 	_update_composed()
 	_item_start_ms = Time.get_ticks_msec()
 	phase = Phase.ACTIVE
@@ -292,6 +307,52 @@ func _process(delta: float) -> void:
 func _move_ship(delta: float) -> void:
 	var axis := Input.get_action_strength("deplacer_droite") - Input.get_action_strength("deplacer_gauche")
 	_ship.position.x = clampf(_ship.position.x + axis * 220.0 * delta, 24, W - 24)
+	_emit_trail(delta)
+
+
+## Traînée cosmétique (5.3) derrière le vaisseau.
+func _emit_trail(delta: float) -> void:
+	var trail := Cosmetics.trail(Game.profile)
+	if trail == "none":
+		return
+	_trail_left -= delta
+	if _trail_left > 0.0:
+		return
+	_trail_left = 0.06
+	var color := UI.ACCENT if trail == "stars" else Color("fb923c")
+	var r := UI.rect(color, Vector2(3, 3))
+	r.position = _ship.position + Vector2(_rng.randf_range(-5, 5), 12)
+	add_child(r)
+	_particles.append({"node": r, "vel": Vector2(_rng.randf_range(-15, 15), 60), "life": 0.4})
+
+
+func outcome_fast_hint(text: String) -> bool:
+	return text == "Rapide !" or text == "PLANÈTE COLONISÉE !"
+
+
+## Boss (7) : barre de résistance fixée par le nombre de faits, et nom de la phase.
+func _build_boss_bar() -> void:
+	var back := UI.rect(Color(0.2, 0.2, 0.25), Vector2(300, 8))
+	back.position = Vector2(W / 2.0 - 150, 30)
+	add_child(back)
+	_boss_bar = UI.rect(UI.BAD, Vector2(300, 8))
+	_boss_bar.position = Vector2(W / 2.0 - 150, 30)
+	add_child(_boss_bar)
+	_boss_label = UI.label("", 11, UI.MUTED, HORIZONTAL_ALIGNMENT_CENTER)
+	_boss_label.position = Vector2(W / 2.0 - 150, 40)
+	_boss_label.size = Vector2(300, 16)
+	add_child(_boss_label)
+
+
+func _update_boss_bar() -> void:
+	if _boss_bar == null:
+		return
+	_boss_bar.size.x = 300.0 * (1.0 - float(item_index - 1) / float(items_total))
+	var table: int = context["tables"][0]
+	var phases := ["Phase 1 : points faibles", "Phase 2 : décomposition", "Phase 3 : rafale finale"]
+	_boss_label.text = "%s  ·  %s" % [Hub.boss_name_of(table).split(" :")[0], phases[_boss_phase]]
+	_enemy_body.color = Color(0.45, 0.2, 0.3)
+	_enemy.scale = Vector2(1.4, 1.4) if _boss_phase < 2 else Vector2(1.0, 1.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -471,7 +532,7 @@ func _wrong_hit(_answer: int, first: bool) -> void:
 	shield -= 1
 	_wrong_this_item = true
 	_shield_blink_left = 0.6
-	_hull.color = UI.GREY
+	_hull.color = _hull_color
 	Sfx.play("error")
 	_enemy.scale = _enemy.scale * 1.15
 	_enemy_body.color = Color(0.5, 0.3, 0.3)
@@ -491,7 +552,7 @@ func _enemy_reached_ship() -> void:
 	if not _wrong_this_item:
 		shield -= 1
 		_shield_blink_left = 0.6
-	_hull.color = UI.GREY
+	_hull.color = _hull_color
 	Sfx.play("hit")
 	_update_hud()
 	_resolve(false, "La planète est assiégée (réponse : %d)" % item["answer"], false)
@@ -512,7 +573,10 @@ func _resolve(success: bool, text: String, reward: bool) -> void:
 			Game.profile.stardust += 1
 			Game.vibrate()
 			# Série de réussites : le vaisseau s'illumine, la musique s'intensifie.
-			_hull.color = UI.GREY.lerp(UI.ACCENT, minf(combo, 6) / 6.0)
+			_hull.color = _hull_color.lerp(Color.WHITE, minf(combo, 6) / 8.0)
+			if is_arena:
+				# Score d'arène : 10 points × combo (plafonné à 10), bonus de rapidité.
+				score += 10 * mini(combo, 10) + (5 if outcome_fast_hint(text) else 0)
 			if text == "PLANÈTE COLONISÉE !":
 				Sfx.play("colonize")
 			elif combo > 0 and combo % 5 == 0:
@@ -543,6 +607,12 @@ func _finish() -> void:
 		"mastered": mastered_keys,
 		"new_facts": new_keys,
 	}
+	if is_arena:
+		result["score"] = score
+		var record: int = Game.profile.records.get("arena_score", 0)
+		result["new_record"] = completed and score > record
+		if result["new_record"]:
+			Game.profile.records["arena_score"] = score
 	if not completed:
 		# Échec doux (6) : les réponses sont gardées, seule la récompense de fin est perdue.
 		Game.profile.stardust -= stardust
@@ -552,6 +622,7 @@ func _finish() -> void:
 		Game.profile.unlocks["crew"].append("crew_%d" % table)
 		result["boss_beaten"] = true
 		result["boss_table"] = table
+		result["crew_name"] = Crew.name_of(table)
 	Game.last_mission_result = result
 	Game.save()
 	if get_tree().current_scene == self:
@@ -563,7 +634,10 @@ func _finish() -> void:
 # ---------------------------------------------------------------------------
 
 func _update_hud() -> void:
-	_hud.text = "%s   %d/%d   Combo ×%d   ✦ %d" % [UI.mission_name(context.get("type", "")), item_index, items_total, combo, stardust]
+	if is_arena:
+		_hud.text = "Arène   %d/%d   Score %d   Combo ×%d   Record %d" % [item_index, items_total, score, combo, Game.profile.records.get("arena_score", 0)]
+	else:
+		_hud.text = "%s   %d/%d   Combo ×%d   ✦ %d" % [UI.mission_name(context.get("type", "")), item_index, items_total, combo, stardust]
 	for i in range(_shield_rect.size()):
 		_shield_rect[i].color = UI.OK if i < shield else Color(0.25, 0.25, 0.3)
 
